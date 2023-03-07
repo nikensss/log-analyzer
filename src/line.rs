@@ -40,7 +40,7 @@ impl Line {
             "\"statusCode\":402,",
         ];
 
-        if !self.line.contains("status code 50") {
+        if !self.line.contains("statusCode\":5") {
             return false;
         }
 
