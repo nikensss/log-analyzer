@@ -1,135 +1,67 @@
+mod line;
 mod progress;
+mod request;
 
+use line::Line;
 use progress::Progress;
-use regex::Regex;
+use request::Request;
 use std::{
     collections::{HashMap, HashSet},
     fs,
 };
 
 fn main() {
-    println!("reading file: 'log'...");
-    let log = fs::read_to_string("log").expect("No file named \"log\" available");
-    let lines: Vec<&str> = log.lines().collect();
-    println!("{} logs", lines.len());
+    let (lines, relevant_ids) = get_lines_and_relevant_ids("log");
+    println!("{} relevant IDs", relevant_ids.len());
 
-    let relevant_ids = find_relevant_request_ids(&lines);
-    let grouped_by_id = group_by_request_id(&lines, &relevant_ids);
-    let (unique_errors, unknown_errors) = get_unique_error_messages(&grouped_by_id);
+    let requests = group_by_id(lines, relevant_ids);
+    println!("found {} errors", requests.len());
 
-    println!("{} errors", &grouped_by_id.len());
-    println!("{} unknown errors", &unknown_errors.len());
-    println!("{} unique errors", &unique_errors.len());
-
-    fs::write(
-        "unknown_errors.json",
-        serde_json::to_string(&unknown_errors).unwrap(),
-    )
-    .expect("Could not serialize unknown errors!");
-
-    fs::write(
-        "unique_errors.json",
-        serde_json::to_string(&unique_errors).unwrap(),
-    )
-    .expect("Could not serialize error messages!");
-
-    fs::write("by_id.json", serde_json::to_string(&grouped_by_id).unwrap())
-        .expect("Could not serialize grouped logs!");
+    fs::write("requests.json", serde_json::to_string(&requests).unwrap())
+        .expect("could not serialize requests!");
 }
 
-fn find_relevant_request_ids<'a>(lines: &'a Vec<&'a str>) -> HashSet<&'a str> {
-    println!("finding relevant request IDs...");
+fn get_lines_and_relevant_ids(filename: &str) -> (Vec<Line>, HashSet<String>) {
+    println!("reading file: '{}'...", filename);
+    let log = fs::read_to_string(filename).expect("no file named \"log\" available");
+    let lines = log.lines().collect::<Vec<&str>>();
 
-    let ignorable_errors = vec![
-        "\"errorStatus\":401,",
-        "\"errorStatus\":404,",
-        "\"statusCode\":401,",
-        "\"statusCode\":402,",
-    ];
-
-    let re = Regex::new(r"^.*reqId.:.(.{36}).*$").unwrap();
-
-    return lines
+    let mut progress = Progress::new(lines.len());
+    let mut relevant_ids = HashSet::new();
+    let lines = lines
         .iter()
-        .filter_map(|l| {
-            if !l.contains("level\":50") {
-                return None;
+        .map(|l| {
+            progress.print_and_increment();
+            let line = Line::new(l);
+            if !line.is_relevant() {
+                return line;
             }
-
-            let contains_ignorable_error = ignorable_errors.iter().any(|e| l.contains(e));
-            if contains_ignorable_error {
-                return None;
-            }
-
-            let Some(captures) = re.captures(l) else { return None; };
-            let Some(id) = captures.get(1) else { return None; };
-            return Some(id.as_str());
+            let Some(id) = line.get_id() else { return line; };
+            relevant_ids.insert(id);
+            return line;
         })
-        .collect::<HashSet<_>>();
+        .collect();
+
+    return (lines, relevant_ids);
 }
 
-fn group_by_request_id<'a>(
-    lines: &'a Vec<&'a str>,
-    relevant_requests_ids: &'a HashSet<&'a str>,
-) -> HashMap<String, Vec<&'a str>> {
-    println!("grouping by request ID...");
+fn group_by_id(lines: Vec<Line>, relevant_ids: HashSet<String>) -> Vec<Request> {
+    let mut requests: HashMap<String, Request> = HashMap::new();
+    println!("creating request objects...");
+    relevant_ids
+        .into_iter()
+        .for_each(|id| drop(requests.insert(id, Request::new())));
 
-    let mut groups: HashMap<String, Vec<&str>> = HashMap::new();
-    let re = Regex::new(r"^.*reqId.:.(.{36}).*$").unwrap();
+    let mut progress = Progress::new(lines.len());
 
-    let mut prog = Progress::new(lines.len());
+    println!("grouping by id...");
+    lines.into_iter().for_each(|line| {
+        progress.print_and_increment();
 
-    for line in lines {
-        prog.print_and_increment();
+        let Some(id) = line.get_id() else { return; };
+        let Some(request) = requests.get_mut(&id) else { return; };
+        request.add_line(line);
+    });
 
-        let Some(captures) =  re.captures(line) else { continue; };
-        let Some(id) = captures.get(1) else { continue; };
-        let id = id.as_str();
-
-        if !relevant_requests_ids.contains(&id) {
-            continue;
-        }
-
-        match groups.get_mut(id) {
-            Some(group) => group.push(line),
-            None => drop(groups.insert(id.to_string(), vec![line])),
-        };
-    }
-
-    return groups;
-}
-
-fn get_unique_error_messages<'a>(
-    groups: &'a HashMap<String, Vec<&'a str>>,
-) -> (HashMap<&'a str, i32>, HashMap<&String, Vec<&'a str>>) {
-    println!("getting unique errors...");
-
-    let mut unique_errors = HashMap::new();
-    let mut unknown_errors = HashMap::new();
-
-    for (request_id, group) in groups.iter() {
-        let Some(msg) = get_group_error_message(group) else {
-            unknown_errors.insert(request_id, group.clone());
-            continue;
-        };
-
-        let count = unique_errors.get(msg).unwrap_or(&0);
-        unique_errors.insert(msg, count + 1);
-    }
-
-    return (unique_errors, unknown_errors);
-}
-
-fn get_group_error_message<'a>(group: &'a Vec<&'a str>) -> Option<&'a str> {
-    let re = Regex::new(r"^.*message.:.(.*?).,.stack.*$").unwrap();
-
-    for line in group {
-        let group_message = re.captures(line).map(|caps| caps.get(1).unwrap().as_str());
-
-        if group_message.is_some() {
-            return group_message;
-        }
-    }
-
-    return None;
+    return requests.into_values().collect();
 }
