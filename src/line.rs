@@ -1,6 +1,11 @@
+use lazy_static::lazy_static;
 use regex::Regex;
 use serde::ser::{Serialize, Serializer};
 
+lazy_static! {
+    static ref REQ_ID: Regex = Regex::new(r"^.*(reqId.:.|request_id=)(.{36}).*$").unwrap();
+    static ref ERR_MSG: Regex = Regex::new(r"^.*message.:.(.*?).,.stack.*$").unwrap();
+}
 pub struct Line<'a> {
     line: &'a str,
 }
@@ -11,15 +16,13 @@ impl<'a> Line<'a> {
     }
 
     pub fn get_id(&self) -> Option<&str> {
-        let re = Regex::new(r"^.*(reqId.:.|request_id=)(.{36}).*$").unwrap();
-        return re
+        return REQ_ID
             .captures(&self.line)
             .map(|request_id| request_id.get(2).unwrap().as_str());
     }
 
     pub fn get_error_message(&self) -> Option<&str> {
-        let re = Regex::new(r"^.*message.:.(.*?).,.stack.*$").unwrap();
-        let Some(err_msg) = re.captures(&self.line) else { return None; };
+        let Some(err_msg) = ERR_MSG.captures(&self.line) else { return None; };
         let Some(err_msg) = err_msg.get(1) else { return None; };
 
         return Some(err_msg.as_str());

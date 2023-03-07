@@ -1,3 +1,4 @@
+extern crate lazy_static;
 mod line;
 mod progress;
 mod request;
