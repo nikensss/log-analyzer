@@ -1,11 +1,8 @@
-use lazy_static::lazy_static;
-use regex::Regex;
+use nom::{
+    branch::alt,
+    bytes::complete::{tag, take, take_until},
+};
 use serde::ser::{Serialize, Serializer};
-
-lazy_static! {
-    static ref REQ_ID: Regex = Regex::new(r"^.*(reqId.:.|request_id=)(.{36}).*$").unwrap();
-    static ref ERR_MSG: Regex = Regex::new(r"^.*message.:.(.*?).,.stack.*$").unwrap();
-}
 
 #[derive(Clone)]
 pub struct Line {
@@ -19,16 +16,29 @@ impl Line {
     }
 
     pub fn get_id(&self) -> Option<&str> {
-        return REQ_ID
-            .captures(&self.line)
-            .map(|request_id| request_id.get(2).unwrap().as_str());
+        let Some((req_id, _)): Option<(&str, &str)> = alt((
+            take_until::<&str, &str, nom::error::Error<&str>>("reqId\":\""),
+            take_until::<&str, &str, nom::error::Error<&str>>("request_id="),
+        ))(self.line.as_str())
+        .ok() else { return None;};
+
+        let Some((req_id, _)): Option<(&str, &str)> = alt((
+            tag::<&str, &str, nom::error::Error<&str>>("reqId\":\""),
+            tag::<&str, &str, nom::error::Error<&str>>("request_id="),
+        ))(req_id)
+        .ok() else { return None;};
+
+        let Some((_, req_id)): Option<(&str, &str)> =
+            take::<usize, &str, nom::error::Error<&str>>(36)(req_id).ok() else { return None;};
+
+        return Some(req_id);
     }
 
     pub fn get_error_message(&self) -> Option<&str> {
-        let Some(err_msg) = ERR_MSG.captures(&self.line) else { return None; };
-        let Some(err_msg) = err_msg.get(1) else { return None; };
+        let Some((err_msg,_)): Option<(&str,&str)> = take_until::<&str, &str, nom::error::Error<&str>>("message\":\"")(self.line.as_str()).ok() else { return None; };
+        let Some((_,err_msg)): Option<(&str,&str)> = take_until::<&str, &str, nom::error::Error<&str>>("\",\"stack")(err_msg).ok() else { return None; };
 
-        return Some(err_msg.as_str());
+        return Some(err_msg);
     }
 
     pub fn is_relevant(&self) -> bool {
