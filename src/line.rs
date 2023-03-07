@@ -36,6 +36,7 @@ impl Line {
 
     pub fn get_error_message(&self) -> Option<&str> {
         let Some((err_msg,_)): Option<(&str,&str)> = take_until::<&str, &str, nom::error::Error<&str>>("message\":\"")(self.line.as_str()).ok() else { return None; };
+        let Some((err_msg,_)): Option<(&str,&str)> = tag::<&str, &str, nom::error::Error<&str>>("message\":\"")(err_msg).ok() else { return None; };
         let Some((_,err_msg)): Option<(&str,&str)> = take_until::<&str, &str, nom::error::Error<&str>>("\",\"stack")(err_msg).ok() else { return None; };
 
         return Some(err_msg);
@@ -50,7 +51,7 @@ impl Line {
             "\"statusCode\":402,",
         ];
 
-        if !self.line.contains("statusCode\":5") {
+        if !self.line.contains("level\":50") {
             return false;
         }
 

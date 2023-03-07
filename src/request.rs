@@ -12,18 +12,20 @@ impl Request {
 
     fn get_id(&self) -> Option<&str> {
         if let Some(line) = &self.lines.last() {
-            if let Some(request_id) = line.get_id() {
-                return Some(request_id);
+            let id = line.get_id();
+            if id.is_some() {
+                return id;
             }
         }
 
         return None;
     }
 
-    fn get_error_message(&self) -> Option<&str> {
+    pub fn get_error_message(&self) -> Option<&str> {
         for line in &self.lines {
-            if line.get_error_message().is_some() {
-                return line.get_error_message();
+            let err_msg = line.get_error_message();
+            if err_msg.is_some() {
+                return err_msg;
             }
         }
 

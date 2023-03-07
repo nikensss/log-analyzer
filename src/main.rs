@@ -25,8 +25,19 @@ fn main() {
     let requests = group_by_id(&lines, relevant_ids);
     println!("found {} errors", requests.len());
 
+    let errors = count_unique_errors(&requests);
+    println!("found {} unique errors", errors.len());
+
+    println!("writing to file...");
     fs::write("requests.json", serde_json::to_string(&requests).unwrap())
         .expect("could not serialize requests!");
+
+    fs::write(
+        "unique_errors.json",
+        serde_json::to_string(&errors).unwrap(),
+    )
+    .expect("could not unique serialize errors!");
+    println!("done!");
 }
 
 fn get_relevant_ids(lines: &Vec<Line>) -> HashSet<&str> {
@@ -64,4 +75,18 @@ fn group_by_id(lines: &Vec<Line>, relevant_ids: HashSet<&str>) -> Vec<Request> {
     }
 
     return requests.into_inner().into_values().collect();
+}
+
+fn count_unique_errors(requests: &Vec<Request>) -> HashMap<&str, usize> {
+    let mut errors = HashMap::new();
+    let mut progress = Progress::new(requests.len());
+
+    for request in requests {
+        progress.print_and_increment();
+
+        let Some(error) = request.get_error_message() else { continue; };
+        let count = errors.entry(error).or_insert(0);
+        *count += 1;
+    }
+    return errors;
 }
