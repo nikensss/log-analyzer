@@ -29,7 +29,7 @@ fn main() {
         .expect("could not serialize requests!");
 }
 
-fn get_relevant_ids<'a>(lines: &'a Vec<Line<'a>>) -> HashSet<&'a str> {
+fn get_relevant_ids(lines: &Vec<Line>) -> HashSet<&str> {
     let mut progress = Progress::new(lines.len());
     let mut relevant_ids = HashSet::new();
     lines.iter().for_each(|line| {
@@ -44,7 +44,7 @@ fn get_relevant_ids<'a>(lines: &'a Vec<Line<'a>>) -> HashSet<&'a str> {
     return relevant_ids;
 }
 
-fn group_by_id<'a>(lines: &'a Vec<Line<'a>>, relevant_ids: HashSet<&'a str>) -> Vec<Request<'a>> {
+fn group_by_id(lines: &Vec<Line>, relevant_ids: HashSet<&str>) -> Vec<Request> {
     let requests: RefCell<HashMap<&str, Request>> = RefCell::new(HashMap::new());
     println!("creating request objects...");
     relevant_ids
@@ -59,7 +59,7 @@ fn group_by_id<'a>(lines: &'a Vec<Line<'a>>, relevant_ids: HashSet<&'a str>) -> 
 
         let Some(id) = line.get_id() else { continue; };
         if let Some(request) = requests.borrow_mut().get_mut(&id) {
-            request.add_line(line);
+            request.add_line(line.clone());
         }
     }
 

@@ -6,12 +6,15 @@ lazy_static! {
     static ref REQ_ID: Regex = Regex::new(r"^.*(reqId.:.|request_id=)(.{36}).*$").unwrap();
     static ref ERR_MSG: Regex = Regex::new(r"^.*message.:.(.*?).,.stack.*$").unwrap();
 }
-pub struct Line<'a> {
-    line: &'a str,
+
+#[derive(Clone)]
+pub struct Line {
+    line: String,
 }
 
-impl<'a> Line<'a> {
+impl Line {
     pub fn new(line: &str) -> Line {
+        let line = line.to_string();
         return Line { line };
     }
 
@@ -50,7 +53,7 @@ impl<'a> Line<'a> {
     }
 }
 
-impl<'a> Serialize for Line<'a> {
+impl Serialize for Line {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,

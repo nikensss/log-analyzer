@@ -1,12 +1,12 @@
 use crate::line::Line;
 use serde::ser::{Serialize, SerializeStruct, Serializer};
 
-pub struct Request<'a> {
-    lines: Vec<&'a Line<'a>>,
+pub struct Request {
+    lines: Vec<Line>,
 }
 
-impl<'a> Request<'a> {
-    pub fn add_line(&'a mut self, line: &'a Line) {
+impl Request {
+    pub fn add_line(&mut self, line: Line) {
         self.lines.push(line);
     }
 
@@ -30,12 +30,12 @@ impl<'a> Request<'a> {
         None
     }
 
-    pub fn new() -> Request<'a> {
+    pub fn new() -> Request {
         return Request { lines: Vec::new() };
     }
 }
 
-impl<'a> Serialize for Request<'a> {
+impl Serialize for Request {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
